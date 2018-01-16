@@ -1,14 +1,12 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on Tue Dec 19 23:05:02 2017
-
 @author: dylan
 """
 
 import tensorflow as tf
 import numpy as np
-import gym
-from gym import wrappers
 import tflearn
 import argparse
 import pprint as pp
@@ -17,6 +15,7 @@ import math
 import sys
 import time
 import random
+import subprocess
 from mavros_msgs.msg import OpticalFlowRad 
 from mavros_msgs.msg import State  
 from sensor_msgs.msg import Range  
@@ -464,8 +463,8 @@ def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
 # ===========================
 
 def main():
-
     with tf.Session() as sess:
+        
         #import sensor variables
         tol = 0.1
         global range1
@@ -480,60 +479,15 @@ def main():
         velx, vely, velz = 0, 0, 0
         
     
-        rospy.init_node('navigator')   
-        rate = rospy.Rate(20) 
-        stateManagerInstance = stateManager(40) 
-    
-        #Subscriptions
-        rospy.Subscriber("/mavros/state", State, stateManagerInstance.stateUpdate)  
-        rospy.Subscriber("/mavros/distance_sensor/hrlv_ez4_pub", Range, distanceCheck)  
-        rospy.Subscriber("/mavros/px4flow/raw/optical_flow_rad", OpticalFlowRad, callback)     
-        rospy.Subscriber("/mavros/imu/data", Imu, gyrocheck)
-        rospy.Subscriber("/mavros/local_position/odom", Odometry, timer)
-        rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, velfinder)
-    
-        #Publishers
-        velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
-        controller = velControl(velPub) 
-        stateManagerInstance.waitForPilotConnection()  
-    
-        #PID hover variables 
-        ui_prev = 0.25
-        e_prev = 0
-        u = 0.25
-    
-        #PID stable x variables
-        ui_prev1 = 0
-        e_prev1 = 0
-        u1 = 0
-       
-        #PID stable y variables
-        ui_prev2 = 0
-        e_prev2 = 0
-        u2 = 0
-    
-        #PID stable z variables
-        ui_prev3 = 0
-        e_prev3 = 0
-        u3 = 0
-    
-        terminal = 0
         
-        xdist = 0
-        
-        #timer variable
-        time1 = timer1
     
         
         np.random.seed(int(1234))
         tf.set_random_seed(int(1234))
-        env.seed(int(1234))
 
         state_dim = 4
         action_dim = 2
         action_bound = 0.5
-        # Ensure action bound is symmetric
-        assert (env.action_space.high == -env.action_space.low)
 
         actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
                              float(0.0001), float(0.001),                                     
@@ -557,13 +511,56 @@ def main():
     
         # Initialize replay memory
         replay_buffer = ReplayBuffer(int(1000000), int(1234))
-        
         while not rospy.is_shutdown():
         
         
             for i in range(int(50000)):
         
                 subprocess.call(['./bashopen.sh'])
+
+                rospy.init_node('navigator')   
+                rate = rospy.Rate(40) 
+                stateManagerInstance = stateManager(rate) 
+		
+				#Subscription
+                rospy.Subscriber("/mavros/state", State, stateManagerInstance.stateUpdate)  
+                rospy.Subscriber("/mavros/distance_sensor/hrlv_ez4_pub", Range, distanceCheck)  
+                rospy.Subscriber("/mavros/px4flow/raw/optical_flow_rad", OpticalFlowRad, callback)     
+                rospy.Subscriber("/mavros/imu/data", Imu, gyrocheck)
+                rospy.Subscriber("/mavros/local_position/odom", Odometry, timer)
+                rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, velfinder)
+		
+				#Publishers
+                velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
+                controller = velControl(velPub) 
+                stateManagerInstance.waitForPilotConnection()  
+		
+				#PID hover variables 
+                ui_prev = 0.25
+                e_prev = 0
+                u = 0.25
+		
+				#PID stable x variables
+                ui_prev1 = 0
+                e_prev1 = 0
+                u1 = 0
+			   
+				#PID stable y variables
+                ui_prev2 = 0
+                e_prev2 = 0
+                u2 = 0
+		
+				#PID stable z variables
+                ui_prev3 = 0
+                e_prev3 = 0
+                u3 = 0
+		
+                terminal = 0
+				
+                xdist = 0
+				
+				#timer variable
+                time1 = timer1
                 ep_reward = 0
                 ep_ave_max_q = 0
                 
@@ -578,14 +575,14 @@ def main():
                     controller.publishTargetPose(stateManagerInstance)
                     stateManagerInstance.incrementLoop()
                     rate.sleep()
-                    
+                    s = [velz,velx,range1,x1]
                     a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
                     #stable x pid
                     u1, ui_prev1, e_prev1 = PID(x1, 0, 1, 1, 1, ui_prev1, e_prev1, 0.075)
                     #stable z pid
                     u3, ui_prev3, e_prev3 = PID(z1, 0, 1, 1, 1, ui_prev3, e_prev3, 0.1)
                     
-                    controller.setVel([a[0],u1,a[1]],[0,0,u3])
+                    controller.setVel([a[0][0],u1,a[0][1]],[0,0,u3])
                     
                     rospy.sleep(0.025)
                     
@@ -593,9 +590,9 @@ def main():
                     
                     
                     r = velx - abs(1.5 - range1)
-                    if timer1 - time1 > 30 
+                    if timer1 - time1 > 30:
                         terminal = 1 
-                    
+                    s2 = [velz,velx,range1,x1]
                     replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
                                       terminal, np.reshape(s2, (actor.s_dim,)))
         
@@ -631,7 +628,6 @@ def main():
                         actor.update_target_network()
                         critic.update_target_network()
         
-                    s = s2
                     ep_reward += r
         
                     if terminal:
