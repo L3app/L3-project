@@ -7,7 +7,6 @@ Created on Tue Dec 19 23:05:02 2017
 
 import tensorflow as tf
 import numpy as np
-import tflearn
 import argparse
 import pprint as pp
 import rospy
@@ -74,16 +73,24 @@ class ReplayBuffer(object):
 #   Actor and Critic DNNs
 # ===========================
 
-class ActorNetwork(object):
+n_hidden_1 = 400
+n_hidden_2 = 300
 
-    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size):
+class ActorNetwork(object):
+    """
+    Input to the network is the state, output is the action
+    under a deterministic policy.
+    The output layer activation is a tanh to keep the action
+    between -2 and 2
+    """
+
+    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
         self.action_bound = action_bound
         self.learning_rate = learning_rate
         self.tau = tau
-        self.batch_size = batch_size
 
         # Actor Network
         self.inputs, self.out, self.scaled_out = self.create_actor_network()
@@ -93,45 +100,50 @@ class ActorNetwork(object):
         # Target Network
         self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network()
 
-        self.target_network_params = tf.trainable_variables()[
-            len(self.network_params):]
+        self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
-        # Op for periodically updating target network with online network
-        # weights
+        # Op for periodically updating target network with online network weights
         self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) +
+            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) + \
                                                   tf.multiply(self.target_network_params[i], 1. - self.tau))
-                for i in range(len(self.target_network_params))]
+             for i in range(len(self.target_network_params))]
 
         # This gradient will be provided by the critic network
         self.action_gradient = tf.placeholder(tf.float32, [None, self.a_dim])
 
         # Combine the gradients here
-        self.unnormalized_actor_gradients = tf.gradients(
-            self.scaled_out, self.network_params, -self.action_gradient)
-        self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
+        self.actor_gradients = tf.gradients(self.scaled_out, self.network_params, -self.action_gradient)
 
-        # Optimization Op
-        self.optimize = tf.train.AdamOptimizer(self.learning_rate).\
+        # Optimization Op by applying gradient, variable pairs
+        self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
             apply_gradients(zip(self.actor_gradients, self.network_params))
 
-        self.num_trainable_vars = len(
-            self.network_params) + len(self.target_network_params)
+        self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
 
     def create_actor_network(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim])
-        net = tflearn.fully_connected(inputs, 400)
-        net = tflearn.layers.normalization.batch_normalization(net)
-        net = tflearn.activations.relu(net)
-        net = tflearn.fully_connected(net, 300)
-        net = tflearn.layers.normalization.batch_normalization(net)
-        net = tflearn.activations.relu(net)
-        # Final layer weights are init to Uniform[-3e-3, 3e-3]
-        w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
-        out = tflearn.fully_connected(
-            net, self.a_dim, activation='tanh', weights_init=w_init)
-        # Scale output to -action_bound to action_bound
-        scaled_out = tf.multiply(out, self.action_bound)
+        inputs = tf.placeholder(tf.float32, [None, self.s_dim])
+
+        weights = {
+            'w1': tf.Variable(tf.truncated_normal([self.s_dim, n_hidden_1]),stddev=0.01),
+            'w2': tf.Variable(tf.truncated_normal([n_hidden_1, n_hidden_2]),stddev=0.01),
+            'out': tf.Variable(tf.truncated_normal([n_hidden_2, self.a_dim]),stddev=0.01)
+            }
+        biases = {
+            'b1': tf.Variable(tf.constant(0.03,shape=[n_hidden_1])),
+            'b2': tf.Variable(tf.constant(0.03,shape=[n_hidden_2])),
+            'out': tf.Variable(tf.constant(0.03,shape=[self.a_dim]))
+            }
+
+
+        # 1st Hidden layer, OPTION: Softmax, relu, tanh or sigmoid
+        h1 = tf.nn.relu(tf.add(tf.matmul(inputs, weights['w1']), biases['b1']))
+        # 2nd Hidden layer, OPTION: Softmax, relu, tanh or sigmoid
+        h2 = tf.nn.relu(tf.add(tf.matmul(h1, weights['w2']), biases['b2']))
+
+        # Run tanh on output to get -1 to 1
+        out = tf.nn.tanh(tf.add(tf.matmul(h2, weights['out']), biases['out']))
+
+        scaled_out = tf.multiply(out, self.action_bound)  # Scale output to -action_bound to action_bound
         return inputs, out, scaled_out
 
     def train(self, inputs, a_gradient):
@@ -158,15 +170,17 @@ class ActorNetwork(object):
 
 
 class CriticNetwork(object):
+    """
+    Input to the network is the state and action, output is Q(s,a).
+    The action must be obtained from the output of the Actor network.
+    """
 
-
-    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, gamma, num_actor_vars):
+    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
         self.learning_rate = learning_rate
         self.tau = tau
-        self.gamma = gamma
 
         # Create the critic network
         self.inputs, self.action, self.out = self.create_critic_network()
@@ -178,42 +192,46 @@ class CriticNetwork(object):
 
         self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
-        # Op for periodically updating target network with online network
-        # weights with regularization
+        # Op for periodically updating target network with online network weights with regularization
         self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) \
-            + tf.multiply(self.target_network_params[i], 1. - self.tau))
-                for i in range(len(self.target_network_params))]
+            [self.target_network_params[i].assign(
+                tf.multiply(self.network_params[i], self.tau) + tf.multiply(self.target_network_params[i], 1. - self.tau))
+             for i in range(len(self.target_network_params))]
 
         # Network target (y_i)
         self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
 
         # Define loss and optimization Op
-        self.loss = tflearn.mean_square(self.predicted_q_value, self.out)
-        self.optimize = tf.train.AdamOptimizer(
-            self.learning_rate).minimize(self.loss)
+        self.loss = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(self.predicted_q_value, self.out))))
+        self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
+        # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.out, self.action)
 
     def create_critic_network(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim])
-        action = tflearn.input_data(shape=[None, self.a_dim])
-        net = tflearn.fully_connected(inputs, 400)
-        net = tflearn.layers.normalization.batch_normalization(net)
-        net = tflearn.activations.relu(net)
+        inputs = tf.placeholder(tf.float32, [None, self.s_dim])
+        action = tf.placeholder(tf.float32, [None, self.a_dim])
 
-        # Add the action tensor in the 2nd hidden layer
-        # Use two temp layers to get the corresponding weights and biases
-        t1 = tflearn.fully_connected(net, 300)
-        t2 = tflearn.fully_connected(action, 300)
+        weights = {
+            'w1': tf.Variable(tf.truncated_normal([self.s_dim, n_hidden_1]),stddev=0.01),
+            'w2': tf.Variable(tf.truncated_normal([n_hidden_1, n_hidden_2]),stddev=0.01),
+            'w2a': tf.Variable(tf.truncated_normal([self.a_dim, n_hidden_2]),stddev=0.01),
+            'out': tf.Variable(tf.truncated_normal([n_hidden_2, 1]),stddev=0.01)
+            }
+        biases = {
+            'b1': tf.Variable(tf.constant(0.03,shape=[n_hidden_1])),
+            'b2': tf.Variable(tf.constant(0.03,shape=[n_hidden_2])),
+            'out': tf.Variable(tf.constant(0.03,shape=[1]))
+            }
 
-        net = tflearn.activation(
-            tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
+        # 1st Hidden layer, OPTION: Softmax, relu, tanh or sigmoid
+        h1 = tf.nn.relu(tf.matmul(inputs, w1) + b1)
+        # 2nd Hidden layer, OPTION: Softmax, relu, tanh or sigmoid
+        # Action inserted here
+        h2 = tf.nn.relu(tf.matmul(h1, w2) + tf.matmul(action, w2a) + b2)
 
-        # linear layer connected to 1 output representing Q(s,a)
-        # Weights are init to Uniform[-3e-3, 3e-3]
-        w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
-        out = tflearn.fully_connected(net, 1, weights_init=w_init)
+        out = tf.matmul(h2, w3) + b3
+
         return inputs, action, out
 
     def train(self, inputs, action, predicted_q_value):
@@ -242,7 +260,7 @@ class CriticNetwork(object):
         })
 
     def update_target_network(self):
-        self.sess.run(self.update_target_network_params)
+self.sess.run(self.update_target_network_params)
 
 class OrnsteinUhlenbeckActionNoise:
     def __init__(self, mu, sigma=0.3, theta=.15, dt=1e-2, x0=None):
