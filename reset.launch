@@ -1,0 +1,7 @@
+
+<launch>
+    <node pkg="reset_world" type="reset.py" name="reset_world" output="screen">
+
+
+    </node>
+</launch>
