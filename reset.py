@@ -19,3 +19,4 @@ reset_world = rospy.ServiceProxy('/gazebo/reset_world', Empty)
 #executing connection 
 # now run the script in a .launuch file
 reset_world()
+# change to the correct directory and run "roslauch reset_world reset.launch"
