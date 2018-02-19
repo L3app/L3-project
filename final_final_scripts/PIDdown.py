@@ -188,6 +188,12 @@ def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
          u = -limit
      return u, ui_prev, e_prev
 
+def poseCheck(msg): #Alan
+    global xDistance
+    global yDistance
+    xDistance = msg.pose.position.x
+    yDistance = msg.pose.position.y
+
 def main():
    
     #import sensor variables
@@ -203,6 +209,12 @@ def main():
     global velx, vely, velz
     velx, vely, velz = 0, 0, 0
     
+    yGain = 3 #Alan: the y direction (drift) proportional gain
+    yDesiredDistance = 0.0 #Alan: The desired y coordinate
+    global xDistance
+    global yDistance
+    xDistance, yDistance = 0.0, 0.0
+    
 
     rospy.init_node('navigator')   
     rate = rospy.Rate(20) 
@@ -215,6 +227,8 @@ def main():
     rospy.Subscriber("/mavros/imu/data", Imu, gyrocheck)
     rospy.Subscriber("/mavros/local_position/odom", Odometry, timer)
     rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, velfinder)
+    
+    rospy.Subscriber("/mavros/local_position/pose", PoseStamped, poseCheck) #Alan: subscribe to local x and y coordinate
 
     #Publishers
     velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
@@ -244,12 +258,8 @@ def main():
     #timer variable
     time1 = timer1
 
-    neu_dict = {'dist': [], 'xvel': [], 'zvel': [], 'pitch':[],  'PIDz': [], 'PIDx': [],'theta': []}
+    neu_dict = {'dist': [], 'xvel': [], 'zvel': [], 'pitch':[],  'PIDz': [],  'PIDx': []}
     switch = 0
-    deltax = 0
-    deltaz = 0
-    z = 0
-    x = 0
     while not rospy.is_shutdown():
 
           
@@ -268,26 +278,17 @@ def main():
         print("loop: " ,stateManagerInstance.getLoopCount(), " distance: ", range1, " u input: ", u, " zvel: ", velz, " angx: ", x1, " angvelx: ", u1, " angy: ", y1, " angvely: ", u2, " angx: ", z1, " angvelx: ", u3) 
 
         if stateManagerInstance.getLoopCount() > 100:
-            zprev = z
-            z = range1
-            xprev = x
-            x = xpos            
-            deltaz = z - zprev
-            deltax = x - xprev
-            if deltax == 0:
-                deltax = 1
-                deltaz = numpy.inf
            #hover pid
-            if range1 > 1.2:
+            if range1 > 1.4:
                switch = 1
-            elif range1 < 0.2: 
+            elif range1 < 0.4: #was z = 0.2
                switch = 0
             if switch == 0:
-               controller.setVel([0,0,u],[0,0,0])
+               controller.setVel([0,yGain*(yDesiredDistance - yDistance),u],[0,0,0])
                u, ui_prev, e_prev = PID(range1, 1.5, 1, 1, 1, ui_prev, e_prev, 0.5)  
             elif switch == 1:
-               controller.setVel([0,0,u],[0,0,0]) 
-               u, ui_prev, e_prev = PID(range1, 0, 1, 1, 1, ui_prev, e_prev, 0.5)  
+               controller.setVel([0,yGain*(yDesiredDistance - yDistance),u],[0,0,0]) 
+               u, ui_prev, e_prev = PID(range1, 0.3, 1, 1, 1, ui_prev, e_prev, 0.5)  #was z = 0
 
             if switch == 0:
                neu_dict['dist'].append(range1)
@@ -296,7 +297,6 @@ def main():
                neu_dict['pitch'].append(y1)
                neu_dict['PIDz'].append(u)
                neu_dict['PIDx'].append(0)
-               neu_dict['theta'].append(math.degrees(numpy.arctan(abs(deltaz/deltax))))
 
             with open(filename, "wb") as f:
                  writer = csv.writer(f)
