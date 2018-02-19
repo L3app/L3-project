@@ -303,7 +303,7 @@ def main():
                 controller.setVel([0,0,u],[0,0,0])
                 u, ui_prev, e_prev = PID(range1, 1.5, 1, 1, 1, ui_prev, e_prev, 0.5) 
             elif switch == 1 and abs(timer2-timer1) < 2:
-                 controller.setVel([0,0,0],[0,0,0])
+                controller.setVel([0,0,0],[0,0,0])
             elif switch == 2 and abs(timer2-timer1) > 2:
                 controller.setVel([xcontrol,0,u],[0,0,0])
                 u, ui_prev, e_prev = PID(range1, 1.5, 1, 1, 1, ui_prev, e_prev, 0.5)
