@@ -298,10 +298,15 @@ def main():
 
 #start publishing velocities after 100 iterations to account for offboard control=========
            if stateManagerInstance.getLoopCount() > 100:
-               if abs(1.5 - range1) < tol:
-                  controller.setVel([0.5,u1,u],[0,0,u3])
+               if abs(range1) > 1.45 and term == 0:
+                   timer2 = timer1
+                   term = 1
+               elif abs(timer2-timer1) < 5:
+                   controller.setVel([0,0,0],[0,0,0]) 
+               elif abs(1.5 - range1) < tol and abs(timer2-timer1) > 5:
+                   controller.setVel([0.5,u1,u],[0,0,u3])
                else:
-                  controller.setVel([0,u1,u],[0,0,u3])
+                   controller.setVel([0,u1,u],[0,0,u3])
 #=========================================================================================
 
 #tensorflow prediction of optimal z velocity==============================================
