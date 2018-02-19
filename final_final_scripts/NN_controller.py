@@ -311,10 +311,15 @@ def main():
                batch_1 = np.reshape(batch_1,(1,4))
                prediction = sess.run(logits, feed_dict={X: batch_1})
 
-               if abs(1.5 - range1) < tol:
-                  controller.setVel([prediction[0][1],u1,prediction[0][0]],[0,0,u3])
+               if abs(range1) > 1.45 and term == 0:
+                   timer2 = timer1
+                   term = 1
+               elif abs(timer2-timer1) < 5:
+                   controller.setVel([0,0,0],[0,0,u3]) 
+               elif abs(1.5 - range1) < tol and abs(timer2-timer1) > 5:
+                   controller.setVel([prediction[0][1],u1,prediction[0][0]],[0,0,u3])
                else:
-                  controller.setVel([0,u1,prediction[0][0]],[0,0,u3])
+                   controller.setVel([0,u1,prediction[0][0]],[0,0,u3])
 #=========================================================================================
 
 #tensorflow prediction of optimal z velocity==============================================
