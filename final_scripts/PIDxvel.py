@@ -311,7 +311,7 @@ def main():
                 elif switch1 == 1:
                     xcontrol = 0.5 - (0.3/90)*math.degrees(numpy.arctan(abs(deltaz/deltax)))
                     xcontrol = xcontrol*-1
-            if switch == 1:
+            if switch == 1 and switch1 == 0:
                 neu_dict['dist'].append(range1)
                 neu_dict['xvel'].append(velx)
                 neu_dict['zvel'].append(velz)

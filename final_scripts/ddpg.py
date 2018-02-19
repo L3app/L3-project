@@ -4,7 +4,7 @@
 Created on Tue Dec 19 23:05:02 2017
 @author: dylan
 """
-
+#import library dependencies====================================================================================================
 import tensorflow as tf
 import numpy as np
 import argparse
@@ -15,6 +15,7 @@ import sys
 import time
 import random
 import subprocess
+import os
 from mavros_msgs.msg import OpticalFlowRad 
 from mavros_msgs.msg import State  
 from sensor_msgs.msg import Range  
@@ -26,23 +27,29 @@ from geometry_msgs.msg import Pose
 from geometry_msgs.msg import TwistStamped 
 from mavros_msgs.srv import *  
 from collections import deque
+#=============================================================================================================================
 
+#name knowledge tmp files=======================================================================================================
 switch = input('switch (0 for first time, 1 for retrain): ')
-filename = input('old knowledge file: ')
+"""filename = input('old knowledge file: ')
 filename2 = input('new knowledge file: ')
 if switch == 1:
     filename3 = input('old knowledge file (critic): ')
-filename4 = input('new knowledge file (critic):')
-
+filename4 = input('new knowledge file (critic):') """
+#===============================================================================================================================
 n_hidden_1 = 400
 n_hidden_2 = 300
+
+# create actor network architecture==============================================================================================
 w1 = tf.Variable(tf.random_normal([4, n_hidden_1]))
 w2 = tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2]))
 w3 = tf.Variable(tf.random_normal([n_hidden_2, 2]))
 b1 = tf.Variable(tf.random_normal([n_hidden_1]))
 b2 = tf.Variable(tf.random_normal([n_hidden_2]))
 b3 = tf.Variable(tf.random_normal([2]))
+#=============================================================================================================================
 
+#create critic network architecture================================================================================================
 w1c =  tf.Variable(tf.random_normal([4, n_hidden_1]))
 w2c = tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2]))
 w2a = tf.Variable(tf.random_normal([2, n_hidden_2]))
@@ -50,7 +57,9 @@ w3c =  tf.Variable(tf.random_normal([n_hidden_2, 1]))
 b1c =  tf.Variable(tf.random_normal([n_hidden_1]))
 b2c =  tf.Variable(tf.random_normal([n_hidden_2]))
 b3c = tf.Variable(tf.random_normal([1]))
+#================================================================================================================================
 
+#create replay buffer data structure for storage of input output reward memories================================================
 class ReplayBuffer(object):
 
     def __init__(self, buffer_size, random_seed=123):
@@ -93,12 +102,10 @@ class ReplayBuffer(object):
     def clear(self):
         self.buffer.clear()
         self.count = 0
-# ===========================
-#   Actor and Critic DNNs
-# ===========================
+#================================================================================================================================
 
 
-
+#actor network class=============================================================================================================
 class ActorNetwork(object):
     """
     Input to the network is the state, output is the action
@@ -148,7 +155,9 @@ class ActorNetwork(object):
             apply_gradients(zip(self.actor_gradients, self.network_params))
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
+#================================================================================================================================
 
+#op to forward propagate through network=========================================================================================
     def create_actor_network(self):
         inputs = tf.placeholder(tf.float32, [None, self.s_dim])
 
@@ -160,7 +169,9 @@ class ActorNetwork(object):
 
         scaled_out = tf.multiply(out_layer, self.action_bound)  # Scale output to -action_bound to action_bound
         return inputs, out_layer, scaled_out
+#================================================================================================================================
 
+# extra ops for actor network functionality=======================================================================================
     def train(self, inputs, a_gradient):
         self.sess.run(self.optimize, feed_dict={
             self.inputs: inputs,
@@ -182,7 +193,9 @@ class ActorNetwork(object):
 
     def get_num_trainable_vars(self):
         return self.num_trainable_vars
+#==================================================================================================================================
 
+#critic network class=============================================================================================================
 class CriticNetwork(object):
     """
     Input to the network is the state and action, output is Q(s,a).
@@ -222,7 +235,9 @@ class CriticNetwork(object):
 
         # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.out, self.action)
+#===================================================================================================================================
 
+#op to forward propagate through network=========================================================================================
     def create_critic_network(self):
         inputs = tf.placeholder(tf.float32, [None, self.s_dim])
         action = tf.placeholder(tf.float32, [None, self.a_dim])
@@ -235,7 +250,9 @@ class CriticNetwork(object):
         out = tf.matmul(layer2, w3c) + b3c
 
         return inputs, action, out
+#===================================================================================================================================
 
+#extra ops for critic network functionality =====================================================================================
     def train(self, inputs, action, predicted_q_value):
         return self.sess.run([self.out, self.optimize], feed_dict={
             self.inputs: inputs,
@@ -263,7 +280,9 @@ class CriticNetwork(object):
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
+#===================================================================================================================================
 
+#class to add noise to system for robustness=========================================================================================
 class OrnsteinUhlenbeckActionNoise:
     def __init__(self, mu, sigma=0.3, theta=.15, dt=1e-2, x0=None):
         self.theta = theta
@@ -284,11 +303,9 @@ class OrnsteinUhlenbeckActionNoise:
 
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+#===================================================================================================================================
 
-# ===========================
-#   Tensorflow Summary Ops
-# ===========================
-
+#function to create summary of key episode results==================================================================================
 def build_summaries():
     episode_reward = tf.Variable(0.)
     tf.summary.scalar("Reward", episode_reward)
@@ -299,11 +316,13 @@ def build_summaries():
     summary_ops = tf.summary.merge_all()
 
     return summary_ops, summary_vars
+#===================================================================================================================================
+
 
 def log(func):
 	print(func.__name__)
 
-
+#control drone class==================================================================================================================
 class velControl:
     def __init__(self, attPub):  
         self._attPub = attPub
@@ -338,7 +357,9 @@ class velControl:
         self._setVelMsg.twist.angular.z = self._AngVelZ
         
         self._attPub.publish(self._setVelMsg) 
+#======================================================================================================================================
 
+#retrieve state of drone class=======================================================================================================
 class stateManager: 
     def __init__(self, rate):
         self._rate = rate
@@ -387,46 +408,18 @@ class stateManager:
             self._rate.sleep
         rospy.logwarn("ROS shutdown")
         return False
-
+#======================================================================================================================================
  
+#functions to process subscriber messages==============================================================================================
 def distanceCheck(msg):
     global range1 
     print("d")
-    range1 = msg.range 
+    range1 = msg.range             
         
-
-
-###################################################################################################
-
-#convert imu reading to body fixed angles
- 
-def quaternion_to_euler_angle(w, x, y, z):
-	ysqr = y * y
-	
-	t0 = +2.0 * (w * x + y * z)
-	t1 = +1.0 - 2.0 * (x * x + ysqr)
-	X = math.degrees(math.atan2(t0, t1))
-	
-	t2 = +2.0 * (w * y - z * x)
-	t2 = +1.0 if t2 > +1.0 else t2
-	t2 = -1.0 if t2 < -1.0 else t2
-	Y = math.degrees(math.asin(t2))
-	
-	t3 = +2.0 * (w * z + x * y)
-	t4 = +1.0 - 2.0 * (ysqr + z * z)
-	Z = math.degrees(math.atan2(t3, t4))
-	
-	return X, Y, Z        
-        
-
-#receive time message
- 
 def timer(msg):
     global timer1
     #print("t")
     timer1 = msg.header.stamp.secs
-    
-#receive velocity message
  
 def velfinder(msg):
     global velx, vely, velz
@@ -442,9 +435,6 @@ def callback(msg):
     x = msg.integrated_x
     y = msg.integrated_y
 
-#receive quaternion angles
-
- 
 def gyrocheck(msg):
     global x1
     global y1
@@ -455,9 +445,9 @@ def gyrocheck(msg):
     z2 = msg.orientation.z
     w = msg.orientation.w
     x1, y1, z1 = quaternion_to_euler_angle(w, x2, y2, z2)
+#======================================================================================================================================
 
-#PID function
- 
+#miscellaneous function============================================================================================================== 
 def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
      # error
      e = yd - y
@@ -478,20 +468,39 @@ def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
          u = -limit
      return u, ui_prev, e_prev
 
+def quaternion_to_euler_angle(w, x, y, z):
+	ysqr = y * y
+	
+	t0 = +2.0 * (w * x + y * z)
+	t1 = +1.0 - 2.0 * (x * x + ysqr)
+	X = math.degrees(math.atan2(t0, t1))
+	
+	t2 = +2.0 * (w * y - z * x)
+	t2 = +1.0 if t2 > +1.0 else t2
+	t2 = -1.0 if t2 < -1.0 else t2
+	Y = math.degrees(math.asin(t2))
+	
+	t3 = +2.0 * (w * z + x * y)
+	t4 = +1.0 - 2.0 * (ysqr + z * z)
+	Z = math.degrees(math.atan2(t3, t4))
+	
+	return X, Y, Z 
+#======================================================================================================================================
 
 
 
-# ===========================
-#   Agent Training
-# ===========================
+#create saver variables================================================================================================================
 saver = tf.train.Saver({"w1": w1, "w2": w2, "w3": w3, "b1": b1, "b2": b2, "b3": b3 })
 saver1 = tf.train.Saver({"w1": w1, "w2": w2, "w3": w3, "b1": b1, "b2": b2, "b3": b3 })
 if switch == 1:
     saver2 = tf.train.Saver({"w1c": w1c, "w2c": w2c, "w2a": w2a, "w3c": w3c, "b1c": b1c, "b2c": b2c, "b3c": b3c })
 saver3 = tf.train.Saver({"w1c": w1c, "w2c": w2c, "w2a": w2a, "w3c": w3c, "b1c": b1c, "b2c": b2c, "b3c": b3c })
+#======================================================================================================================================
+
+#start main function==================================================================================================================
 def main():
     with tf.Session() as sess:
-        
+#======================================================================================================================================
         """batch_1 = np.empty([1, 1])
         batch_1[0,0] = 1.0
         print(sess.run(logits, feed_dict={inputs1: batch_1}))
@@ -501,9 +510,7 @@ def main():
         print(sess.run(logits, feed_dict={inputs1: batch_1}))
         batch_1[0,0] = 2.0
         print(sess.run(logits, feed_dict={inputs1: batch_1}))"""
-
-
-        #import sensor variables
+#import sensor variables=================================================================================================================
         tol = 0.1
         global range1
         range1 = 0
@@ -515,18 +522,17 @@ def main():
         timer1 = 0
         global velx, vely, velz
         velx, vely, velz = 0, 0, 0
-        
+#======================================================================================================================================
     
-        
-    
-        
+#initialize training parameters=======================================================================================================        
         np.random.seed(int(1234))
         tf.set_random_seed(int(1234))
-
         state_dim = 4
         action_dim = 2
         action_bound = 0.5
+#======================================================================================================================================
 
+#initialize networks===================================================================================================================
         actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
                              float(0.0001), float(0.001),                                     
                              int(64))
@@ -535,31 +541,52 @@ def main():
                                float(0.0001), float(0.001),
                                float(0.99),
                                actor.get_num_trainable_vars())
+#======================================================================================================================================
 
+#reconstruct relevant memory===========================================================================================================
         sess.run(tf.global_variables_initializer())
-        saver.restore(sess, filename)"
+        saver.restore(sess, "tmpPID/model.ckpt")
         if switch == 1:
             saver2.restore(sess, filename3)
-        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
+#======================================================================================================================================
 
+#======================================================================================================================================
+        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
         summary_ops, summary_vars = build_summaries()
-        
         writer = tf.summary.FileWriter('./results/tf_ddpg', sess.graph)
+#======================================================================================================================================
+
+#======================================================================================================================================
         # Initialize target network weights
         actor.update_target_network()
         critic.update_target_network()
         # Initialize replay memory
         replay_buffer = ReplayBuffer(int(1000000), int(1234))
+#======================================================================================================================================
+
+#import self made ramps and start episodes==============================================================================================
+        names = ["world1.world", "world2.world","world3.world","world4.world", "world5.world","world6.world","world7.world","world8.world","world9.world","world10.world"]
         for i in range(int(10)):
+            i=i%10
+            os.chdir("/home/arl/src/Firmware/Tools/sitl_gazebo/worlds")
+            os.rename(names[i],"iris_opt_flow.world")
+            os.chdir("/home/arl/L3-project-master/Everything/final_scripts")
+#========================================================================================================================================  
+
+#open gazebo===================================================================================================================
             if i==0:
                 subprocess.call(['./bashopen.sh'])
             else:
                 subprocess.call(['./bashopen_second.sh'])
+#======================================================================================================================================
 
+#utility ============================================================================================================================
             rospy.init_node('navigator')   
             rate = rospy.Rate(40) 
             stateManagerInstance = stateManager(rate) 
+#======================================================================================================================================
 	
+#subscriptions======================================================================================================================
 			#Subscription
             rospy.Subscriber("/mavros/state", State, stateManagerInstance.stateUpdate)  
             rospy.Subscriber("/mavros/distance_sensor/hrlv_ez4_pub", Range, distanceCheck)  
@@ -567,12 +594,16 @@ def main():
             rospy.Subscriber("/mavros/imu/data", Imu, gyrocheck)
             rospy.Subscriber("/mavros/local_position/odom", Odometry, timer)
             rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, velfinder)
-	        
+#======================================================================================================================================	 
+
+#publishers==========================================================================================================================       
 			#Publishers
             velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
             controller = velControl(velPub) 
-            stateManagerInstance.waitForPilotConnection(i)  
-	
+            stateManagerInstance.waitForPilotConnection(i) 
+#======================================================================================================================================
+
+#PID variables=========================================================================================================================
 			#PID hover variables 
             ui_prev = 0.25
             e_prev = 0
@@ -592,16 +623,20 @@ def main():
             ui_prev3 = 0
             e_prev3 = 0
             u3 = 0
-	
+#======================================================================================================================================
+
+#======================================================================================================================================
             terminal = 0
-			
+			#term = 0
             xdist = 0
-			
+#======================================================================================================================================			
 			#timer variable
-            
+#initialize rewards===================================================================================================================            
             ep_reward = 0
             ep_ave_max_q = 0
-                
+#======================================================================================================================================  
+
+#for loop to get data before offboard processing=======================================================================================             
             for k in range(100):
                 if rospy.is_shutdown():
                     while rospy.is_shutdown():
@@ -610,15 +645,46 @@ def main():
                 controller.publishTargetPose(stateManagerInstance)
                 stateManagerInstance.incrementLoop()
                 rate.sleep()
+#======================================================================================================================================
+
+#initialize timer variable===============================================================================================================
             time1 = timer1
+#======================================================================================================================================
+
+            #if abs(range1 - 1.5) > tol:
+                #controller.setVel([0,0,],[,,])
+            #if abs(time1 - timer1) < 5:
+                #controller.setvel([0,0,0],[0,0,0])
+
+#start episode loop=======================================================================================================================
             for j in range(int(10000)):
                 if rospy.is_shutdown():
                     while rospy.is_shutdown():
                         rospy.spin()
-                
+#======================================================================================================================================
+
+#======================================================================================================================================                
                 controller.publishTargetPose(stateManagerInstance)
                 stateManagerInstance.incrementLoop()
                 rate.sleep()
+#======================================================================================================================================
+
+#tests======================================================================================================================
+                s = [0.2, 0.3, 0.2, 0]
+                a = actor.predict(np.reshape(s, (1, actor.s_dim)))
+                print(s)
+                print('whole a:', a)
+                s = [1.8, 0.4, 0.2, 0]
+                a = actor.predict(np.reshape(s, (1, actor.s_dim)))
+                print(s)
+                print('whole a:', a)
+                s = [1.3, 0.2, 0.4, 0]
+                a = actor.predict(np.reshape(s, (1, actor.s_dim)))
+                print(s)
+                print('whole a:', a)
+#======================================================================================================================================
+                rospy.sleep(10)
+#predict velocities and control drone==================================================================================================
                 s = [range1, velz, velx, y1]
                 a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
                 print('whole a:', a)
@@ -631,25 +697,27 @@ def main():
                 u3, ui_prev3, e_prev3 = PID(z1, 0, 1, 1, 1, ui_prev3, e_prev3, 0.1)
                 
                 controller.setVel([a[0][0],u1,a[0][1]],[0,0,u3])
-                
+#======================================================================================================================================
+
+#wait then get reward and next state then add to memory================================================================================              
                 rospy.sleep(0.025)
-                
-    
-                
-                
                 r = velx - abs(1.5 - range1)
                 if timer1 - time1 > 12:
                     terminal = 1 
                 s2 = [range1, velz, velx, y1]
                 replay_buffer.add(np.reshape(s, (actor.s_dim,)), np.reshape(a, (actor.a_dim,)), r,
                                   terminal, np.reshape(s2, (actor.s_dim,)))
-    
+#======================================================================================================================================
+
+#======================================================================================================================================
                 # Keep adding experience to the memory until
                 # there are at least minibatch size samples
                 if replay_buffer.size() > int(64):
                     s_batch, a_batch, r_batch, t_batch, s2_batch = \
                         replay_buffer.sample_batch(int(64))
-    
+#======================================================================================================================================
+
+#======================================================================================================================================    
                     # Calculate targets
                     target_q = critic.predict_target(
                         s2_batch, actor.predict_target(s2_batch))
@@ -660,12 +728,17 @@ def main():
                             y_i.append(r_batch[m])
                         else:
                             y_i.append(r_batch[m] + critic.gamma * target_q[m])
+#======================================================================================================================================
+
+#======================================================================================================================================
                     # Update the critic given the targets
                     predicted_q_value, _ = critic.train(
                         s_batch, a_batch, np.reshape(y_i, (int(64), 1)))
     
                     ep_ave_max_q += np.amax(predicted_q_value)
-    
+#======================================================================================================================================
+
+#======================================================================================================================================
                     # Update the actor policy using the sampled gradient
                     a_outs = actor.predict(s_batch)
                     grads = critic.action_gradients(s_batch, a_outs)
@@ -673,9 +746,13 @@ def main():
                     # Update target networks
                     actor.update_target_network()
                     critic.update_target_network()
-    
-                ep_reward += r
+#======================================================================================================================================
 
+#add reward=========================================================================================================================
+                ep_reward += r
+#======================================================================================================================================
+
+#statement to end episode=========================================================================================================================
                 if terminal:
 
                     summary_str = sess.run(summary_ops, feed_dict={
@@ -691,10 +768,18 @@ def main():
                     break
                     stateManagerInstance.offboardRequest()  
                     stateManagerInstance.armRequest()
-################################################change this ############################################
-            save_path = saver1.save(sess, filename2)
-            save_path = saver3.save(sess, filename4)
-########################################################################################################
+#======================================================================================================================================
+
+#save knowledge=======================================================================================================================
+            save_path = saver1.save(sess, "tmpact/model.ckpt")
+            save_path = saver3.save(sess, "tmpcrit/model.ckpt")
+#======================================================================================================================================
+
+#close gazebo and unname ramp file=====================================================================================================
             subprocess.call(['./bashclose.sh'])
+            os.chdir("/home/arl/src/Firmware/Tools/sitl_gazebo/worlds")
+            os.rename("iris_opt_flow.world", names[i])
+            os.chdir("/home/arl/L3-project-master/Everything/final_scripts")
+#======================================================================================================================================
 if __name__ == '__main__':
     main()
