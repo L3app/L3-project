@@ -396,13 +396,10 @@ class stateManager:
         except rospy.ServiceException as e:   
            print("Service arm failed with exception :%s"%e)
 
-    def waitForPilotConnection(self, i):   
+    def waitForPilotConnection(self):   
         rospy.logwarn("Waiting for pilot connection")
-        print('1', i)
         while not rospy.is_shutdown():  
-            print('2', i)
             if self._isConnected:
-                print('3', i)
                 rospy.logwarn("Pilot is connected")
                 return True
             self._rate.sleep
@@ -413,7 +410,6 @@ class stateManager:
 #functions to process subscriber messages==============================================================================================
 def distanceCheck(msg):
     global range1 
-    print("d")
     range1 = msg.range             
         
 def timer(msg):
@@ -461,7 +457,6 @@ def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
      e_prev = e
      ui_prev = ui
      u = Kp * (e + ui + ud)
-     print("U: ", u)
      if u > limit:
          u = limit
      if u < -limit:
@@ -570,7 +565,7 @@ def main():
             i=i%10
             os.chdir("/home/arl/src/Firmware/Tools/sitl_gazebo/worlds")
             os.rename(names[i],"iris_opt_flow.world")
-            os.chdir("/home/arl/L3-project-master/Everything/final_scripts")
+            os.chdir("/home/arl/L3-project-master/Everything/final_final_scripts")
 #========================================================================================================================================  
 
 #open gazebo===================================================================================================================
@@ -600,7 +595,7 @@ def main():
 			#Publishers
             velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
             controller = velControl(velPub) 
-            stateManagerInstance.waitForPilotConnection(i) 
+            stateManagerInstance.waitForPilotConnection() 
 #======================================================================================================================================
 
 #PID variables=========================================================================================================================
@@ -655,14 +650,14 @@ def main():
                 #controller.setVel([0,0,],[,,])
             #if abs(time1 - timer1) < 5:
                 #controller.setvel([0,0,0],[0,0,0])
-
+            print('Entering for loop')
 #start episode loop=======================================================================================================================
             for j in range(int(10000)):
                 if rospy.is_shutdown():
                     while rospy.is_shutdown():
                         rospy.spin()
 #======================================================================================================================================
-
+                print(j)
 #======================================================================================================================================                
                 controller.publishTargetPose(stateManagerInstance)
                 stateManagerInstance.incrementLoop()
@@ -670,26 +665,11 @@ def main():
 #======================================================================================================================================
 
 #tests======================================================================================================================
-                s = [0.2, 0.3, 0.2, 0]
-                a = actor.predict(np.reshape(s, (1, actor.s_dim)))
-                print(s)
-                print('whole a:', a)
-                s = [1.8, 0.4, 0.2, 0]
-                a = actor.predict(np.reshape(s, (1, actor.s_dim)))
-                print(s)
-                print('whole a:', a)
-                s = [1.3, 0.2, 0.4, 0]
-                a = actor.predict(np.reshape(s, (1, actor.s_dim)))
-                print(s)
-                print('whole a:', a)
+                
 #======================================================================================================================================
-                rospy.sleep(10)
 #predict velocities and control drone==================================================================================================
                 s = [range1, velz, velx, y1]
                 a = actor.predict(np.reshape(s, (1, actor.s_dim))) + actor_noise()
-                print('whole a:', a)
-                print('1 a:', a[0][0])
-                print('2 a: ', a[0][1])
                 #a = actor.predict(np.reshape(s, (1, actor.s_dim)))
                 #stable x pid
                 u1, ui_prev1, e_prev1 = PID(x1, 0, 1, 1, 1, ui_prev1, e_prev1, 0.075)
@@ -779,7 +759,7 @@ def main():
             subprocess.call(['./bashclose.sh'])
             os.chdir("/home/arl/src/Firmware/Tools/sitl_gazebo/worlds")
             os.rename("iris_opt_flow.world", names[i])
-            os.chdir("/home/arl/L3-project-master/Everything/final_scripts")
+            os.chdir("/home/arl/L3-project-master/Everything/final_final_scripts")
 #======================================================================================================================================
 if __name__ == '__main__':
     main()

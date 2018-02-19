@@ -244,8 +244,12 @@ def main():
     #timer variable
     time1 = timer1
 
-    neu_dict = {'dist': [], 'xvel': [], 'zvel': [], 'pitch':[],  'PIDz': [],  'PIDx': []}
+    neu_dict = {'dist': [], 'xvel': [], 'zvel': [], 'pitch':[],  'PIDz': [], 'PIDx': [],'theta': []}
     switch = 0
+    deltax = 0
+    deltaz = 0
+    z = 0
+    x = 0
     while not rospy.is_shutdown():
 
           
@@ -264,8 +268,17 @@ def main():
         print("loop: " ,stateManagerInstance.getLoopCount(), " distance: ", range1, " u input: ", u, " zvel: ", velz, " angx: ", x1, " angvelx: ", u1, " angy: ", y1, " angvely: ", u2, " angx: ", z1, " angvelx: ", u3) 
 
         if stateManagerInstance.getLoopCount() > 100:
+            zprev = z
+            z = range1
+            xprev = x
+            x = xpos            
+            deltaz = z - zprev
+            deltax = x - xprev
+            if deltax == 0:
+                deltax = 1
+                deltaz = numpy.inf
            #hover pid
-            if range1 > 1.4:
+            if range1 > 1.2:
                switch = 1
             elif range1 < 0.2: 
                switch = 0
@@ -283,6 +296,7 @@ def main():
                neu_dict['pitch'].append(y1)
                neu_dict['PIDz'].append(u)
                neu_dict['PIDx'].append(0)
+               neu_dict['theta'].append(math.degrees(numpy.arctan(abs(deltaz/deltax))))
 
             with open(filename, "wb") as f:
                  writer = csv.writer(f)

@@ -296,34 +296,13 @@ def main():
                 switch = 0
             elif range1 > 1.2 and range1 < 1.8:
                 switch = 1
-            if xpos > 5:
-                switch1 = 1
-            elif xpos < 1:
-                switch1 = 0
             if switch == 0:
                 controller.setVel([0,0,u],[0,0,0])
                 u, ui_prev, e_prev = PID(range1, 1.5, 1, 1, 1, ui_prev, e_prev, 0.5)  
             elif switch == 1:
                 controller.setVel([xcontrol,0,u],[0,0,0])
                 u, ui_prev, e_prev = PID(range1, 1.5, 1, 1, 1, ui_prev, e_prev, 0.5)
-                if switch1 == 0:
-                    xcontrol = 0.5 - (0.3/90)*math.degrees(numpy.arctan(abs(deltaz/deltax)))
-                elif switch1 == 1:
-                    xcontrol = 0.5 - (0.3/90)*math.degrees(numpy.arctan(abs(deltaz/deltax)))
-                    xcontrol = xcontrol*-1
-            if switch == 1 and switch1 == 0:
-                neu_dict['dist'].append(range1)
-                neu_dict['xvel'].append(velx)
-                neu_dict['zvel'].append(velz)
-                neu_dict['pitch'].append(y1)
-                neu_dict['PIDz'].append(u)
-                neu_dict['PIDx'].append(xcontrol)
-                neu_dict['theta'].append(math.degrees(numpy.arctan(abs(deltaz/deltax))))
-
-            with open("test_1.csv", "wb") as f:
-                 writer = csv.writer(f)
-                 writer.writerow(neu_dict.keys())
-                 writer.writerows(zip(*neu_dict.values()))
+                xcontrol = 0.5 - (0.3/90)*math.degrees(numpy.arctan(abs(deltaz/deltax)))
 
             """#stable y pid
             controller.setAngVel([0,u2,0])
