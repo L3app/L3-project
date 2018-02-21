@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+
+# import statements================================================================
 import csv
 import rospy
 import math
@@ -14,11 +16,11 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Pose 
 from geometry_msgs.msg import TwistStamped 
 from mavros_msgs.srv import *   
+#==================================================================================
 
 
 
-
-
+# control drone class==============================================================
 class velControl:
     def __init__(self, attPub):  
         self._attPub = attPub
@@ -53,7 +55,9 @@ class velControl:
         self._setVelMsg.twist.angular.z = self._AngVelZ
         
         self._attPub.publish(self._setVelMsg) 
+#==================================================================================
 
+# retrieve state of drone==========================================================
 class stateManager: 
     def __init__(self, rate):
         self._rate = rate
@@ -99,17 +103,18 @@ class stateManager:
             self._rate.sleep
         rospy.logwarn("ROS shutdown")
         return False
-
+#==================================================================================
  
+# functions to process subscriber messages========================================= 
 def distanceCheck(msg):
     global range1 
     print("d")
     range1 = msg.range 
-        
+#==================================================================================        
 
 
 
-#convert imu reading to body fixed angles
+#convert imu reading to body fixed angles==========================================
  
 def quaternion_to_euler_angle(w, x, y, z):
 	ysqr = y * y
@@ -128,16 +133,17 @@ def quaternion_to_euler_angle(w, x, y, z):
 	Z = math.degrees(math.atan2(t3, t4))
 	
 	return X, Y, Z        
-        
+#================================================================================        
 
-#receive time message
+#receive time message============================================================
  
 def timer(msg):
     global timer1
     #print("t")
     timer1 = msg.header.stamp.secs
-    
-#receive velocity message
+#================================================================================
+
+#receive velocity message========================================================
  
 def velfinder(msg):
     global velx, vely, velz
@@ -145,7 +151,7 @@ def velfinder(msg):
     velx = msg.twist.linear.x
     vely = msg.twist.linear.y
     velz = msg.twist.linear.z
- 
+#================================================================================
 def callback(msg):
     global x
     global y
@@ -153,9 +159,8 @@ def callback(msg):
     x = msg.integrated_x
     y = msg.integrated_y
 
-#receive quaternion angles
+#receive quaternion angles=======================================================
 
- 
 def gyrocheck(msg):
     global x1
     global y1
@@ -166,7 +171,9 @@ def gyrocheck(msg):
     z2 = msg.orientation.z
     w = msg.orientation.w
     x1, y1, z1 = quaternion_to_euler_angle(w, x2, y2, z2)
+#=================================================================================
 
+# recieve position of drone=======================================================
 def PosCheck(msg):
     global xpos
     global ypos
@@ -174,8 +181,10 @@ def PosCheck(msg):
     xpos = msg.pose.position.x
     ypos = msg.pose.position.y
     zpos = msg.pose.position.z
+#=================================================================================
 
-#PID function
+#PID function=====================================================================
+
  
 def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
      # error
@@ -196,16 +205,20 @@ def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
      if u < -limit:
          u = -limit
      return u, ui_prev, e_prev
+#=================================================================================
 
-def poseCheck(msg): #Alan
+# new distance variable===========================================================
+def poseCheck(msg):
     global xDistance
     global yDistance
     xDistance = msg.pose.position.x
     yDistance = msg.pose.position.y
+#=================================================================================
 
+# define main function to be run==================================================
 def main():
    
-    #import sensor variables
+    #import sensor variables======================================================
     tol = 0.1
     global range1
     range1 = 0
@@ -219,9 +232,9 @@ def main():
     velx, vely, velz = 0, 0, 0
     global xpos, ypos, zpos
     xpos, ypos, zpos = 0, 0, 0
-    
-    yGain = 3 #Alan: the y direction (drift) proportional gain
-    yDesiredDistance = 0.0 #Alan: The desired y coordinate
+    #=============================================================================
+    yGain = 3 #The y direction (drift) proportional gain
+    yDesiredDistance = 0.0 #The desired y coordinate
     global xDistance
     global yDistance
     xDistance, yDistance = 0.0, 0.0
@@ -230,8 +243,8 @@ def main():
     rospy.init_node('navigator')   
     rate = rospy.Rate(20) 
     stateManagerInstance = stateManager(rate) 
-
-    #Subscriptions
+   
+                                                     #Subscriptions====================================================================
     rospy.Subscriber("/mavros/state", State, stateManagerInstance.stateUpdate)  
     rospy.Subscriber("/mavros/distance_sensor/hrlv_ez4_pub", Range, distanceCheck)  
     rospy.Subscriber("/mavros/px4flow/raw/optical_flow_rad", OpticalFlowRad, callback)     
@@ -241,12 +254,14 @@ def main():
     rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, velfinder)
     
     rospy.Subscriber("/mavros/local_position/pose", PoseStamped, poseCheck) #Alan: subscribe to local x and y coordinate
-
-    #Publishers
+    #============================================================================
+    
+    #Publishers==================================================================
     velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
     controller = velControl(velPub) 
     stateManagerInstance.waitForPilotConnection()  
-
+    #============================================================================
+    
     #PID hover variables 
     ui_prev = 0.25
     e_prev = 0
@@ -292,9 +307,11 @@ def main():
 
 
 
-        #print debugging values
+        #print debugging values#==================================================
         print("loop: " ,stateManagerInstance.getLoopCount(), " distance: ", range1, " u input: ", u, " zvel: ", velz, " angx: ", x1, " angvelx: ", u1, " angy: ", y1, " angvely: ", u2, " angx: ", z1, " angvelx: ", u3) 
-
+        #=========================================================================
+        
+        # starting ROS instructions===============================================
         if stateManagerInstance.getLoopCount() > 100:
            #hover pid
             zprev = z
@@ -303,6 +320,8 @@ def main():
             x = xpos            
             deltaz = z - zprev
             deltax = x - xprev
+            
+            #setting drone velocities and drift according to height and range======
             if deltax == 0:
                 deltax = 1
                 deltaz = 0
@@ -327,6 +346,9 @@ def main():
                     xcontrol = 0.5 - (0.3/0.1)*numpy.clip(abs(range1 - 1.5),0,0.1)
                     #xcontrol = 0.5 - (0.3/90)*math.degrees(numpy.arctan(abs(deltaz/deltax)))
                     xcontrol = xcontrol*-1
+             #====================================================================
+            
+            # defining new dictionary for data collection=========================
             if switch == 1 and switch1 == 0:
                 neu_dict['dist'].append(range1)
                 neu_dict['xvel'].append(velx)
@@ -334,7 +356,9 @@ def main():
                 neu_dict['pitch'].append(y1)
                 neu_dict['PIDz'].append(u)
                 neu_dict['PIDx'].append(xcontrol)
-
+            #====================================================================
+            
+            #Writing data to new file============================================
             with open("test_1.csv", "wb") as f:
                  writer = csv.writer(f)
                  writer.writerow(neu_dict.keys())
@@ -347,9 +371,10 @@ def main():
             
 
             stateManagerInstance.offboardRequest()  
-            stateManagerInstance.armRequest()  
+            stateManagerInstance.armRequest() 
+            #===================================================================== 
     rospy.spin()  
-
+#==================================================================================
     
 
 
