@@ -169,16 +169,17 @@ def gyrocheck(msg):
 
 #PID function
  
-def PID(y, yd, Ki, Kd, Kp, ui_prev, dh, limit, dt):
+def PID(y, yd, Ki, Kd, Kp, ui_prev, e_prev, limit):
      # error
      e = yd - y
      # Integrator
-     ui = ui_prev + Ki * e * dt
+     ui = ui_prev + 1.0 / Ki * e
      # Derivative
-     ud = Kd * (dh / dt)	
+     ud = 1.0 / Kd * (e - e_prev)	
      #constraint on values, resetting previous values	
-     #ui = ui/8
-     #ud = ud/8
+     ui = ui/8
+     ud = ud/8
+     e_prev = e
      ui_prev = ui
      u = Kp * (e + ui + ud)
      print("U: ", u)
@@ -186,7 +187,7 @@ def PID(y, yd, Ki, Kd, Kp, ui_prev, dh, limit, dt):
          u = limit
      if u < -limit:
          u = -limit
-     return u, ui_prev
+     return u, ui_prev, e_prev
 
 def poseCheck(msg): #Alan
     global xDistance
@@ -300,16 +301,16 @@ def main():
                deltaz = numpy.inf
             if range1 > 6:
                switch = 1
-            elif range1 < 1.7: 
+            elif range1 < 1.8: 
                switch = 0
             
             #yGain*(yDesiredDistance - yDistance)
             if switch == 0:
                controller.setVel([0,0,u],[0,0,0])
-               u, ui_prev = PID(range1, 6, 0, 0.01, 1.1, ui_prev, dh, 0.5, dt)  
+               u, ui_prev, e_prev = PID(range1, 6, 1, 1, 1, ui_prev, e_prev, 0.5)
             elif switch == 1:
                controller.setVel([0,0,u],[0,0,0])
-               u, ui_prev = PID(range1, 1.5, 0, 0.01, 1.1, ui_prev, dh, 0.5, dt)
+               u, ui_prev, e_prev = PID(range1, 1.5, 1, 1, 1, ui_prev, e_prev, 0.5)
 
             if switch == 1:
                neu_dict['dist'].append(range1)
