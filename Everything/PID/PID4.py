@@ -4,6 +4,9 @@ import rospy
 import math
 import sys
 import time
+import numpy as np
+import matplotlib.pyplot as plt
+import warnings
 from mavros_msgs.msg import OpticalFlowRad 
 from mavros_msgs.msg import State  
 from sensor_msgs.msg import Range  
@@ -14,8 +17,7 @@ from geometry_msgs.msg import Pose
 from geometry_msgs.msg import TwistStamped 
 from mavros_msgs.srv import *   
 
-
-
+warnings.filterwarnings("ignore",".*GUI is implemented.*")
 
 class velControl:
     def __init__(self, attPub):  
@@ -70,7 +72,7 @@ class stateManager:
         self._isConnected = msg.connected
         self._isArmed = msg.armed
         self._mode = msg.mode
-        rospy.logwarn("Connected is {}, armed is {}, mode is {} ".format(self._isConnected, self._isArmed, self._mode)) 
+        #rospy.logwarn("Connected is {}, armed is {}, mode is {} ".format(self._isConnected, self._isArmed, self._mode)) 
      
     def armRequest(self):
         rospy.wait_for_service('/mavros/set_mode')
@@ -101,7 +103,7 @@ class stateManager:
  
 def distanceCheck(msg):
     global range1 
-    print("d")
+    #print("d")
     range1 = msg.range 
         
 
@@ -170,17 +172,17 @@ def gyrocheck(msg):
  
 def PID(y, yd, Ki, Kd, Kp, ui_prev, dh, limit, dt):
      # error
-     e = y - yd
+     e = yd - y
      # Integrator
      ui = ui_prev + Ki * e * dt
      # Derivative
      ud = Kd * (dh / dt)
      #constraint on values, resetting previous values	
-     ui = ui/8
-     ud = ud/8
+     #ui = ui/8
+     #ud = ud/8
      ui_prev = ui
      u = Kp * (e + ui + ud)
-     print("U: ", u)
+     #print("U: ", u)
      if u > limit:
          u = limit
      if u < -limit:
@@ -202,12 +204,15 @@ def main():
     global velx, vely, velz
     velx, vely, velz = 0, 0, 0
 
-    with open("test.csv") as f:
-         lis=[line.split(',') for line in f] 
-    lis1 = [float(x[0].rstrip()) for x in lis[1:len(lis)]]
-    print lis1[0]
-    print lis1[1]
-    print lis1[2]
+    global offboard_status
+
+    with open("test.csv") as h:
+    	lis = [line.split(',') for line in h]
+	#print lis 
+    	lis1 = [float(x[0].rstrip()) for x in lis[1:len(lis)]]
+    print lis1
+    #print lis1[1]
+    #print lis1[2]
 
     rospy.init_node('navigator')   
     rate = rospy.Rate(20) 
@@ -221,15 +226,19 @@ def main():
     rospy.Subscriber("/mavros/local_position/odom", Odometry, timer)
     rospy.Subscriber("/mavros/local_position/velocity", TwistStamped, velfinder)
 
+    offboard_status = False
+    #global posvec
+    #global y
+
     #Publishers
     velPub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=2) 
     controller = velControl(velPub) 
     stateManagerInstance.waitForPilotConnection()  
 
     #PID hover variables 
-    ui_prev = 0.25
+    ui_prev = 0
     e_prev = 0
-    u = 0.25
+    u = 0
 
     #PID stable x variables
     ui_prev1 = 0
@@ -249,13 +258,19 @@ def main():
     #timer variable
     time = 0.0
     
-    h = 0
+    h = 0 #calculated from range1
+    altitude = 0 #calculated by integrating u_z
+    altitude_prev = 0
     yaw = 0
     roll = 0
 
+    rec_t = list()
+    rec_range1 = list()
+    rec_u = list()
+
     neu_dict = {'time': [], 'error': []}
 
-    while not rospy.is_shutdown() and stateManagerInstance.getLoopCount() < 150:
+    while not rospy.is_shutdown() and stateManagerInstance.getLoopCount() < 250:
         
         h_prev = h
         h = range1
@@ -270,10 +285,13 @@ def main():
         droll = roll - roll_prev       
  
         time_prev = time
-        time = float(rospy.Time.now().nsecs)
+        time = float(rospy.get_time())
         dt = time - time_prev 
-        dt = dt * 0.00000001
-        print(dt, "hello")
+        #dt = dt * 0.000000001
+
+	print("getLoopCount is ", stateManagerInstance.getLoopCount())
+	altitude_prev = altitude
+	altitude = altitude_prev + u * dt
         
         #while timer1 - time1 < 5:
             #print(timer1 - time1)
@@ -286,39 +304,53 @@ def main():
 
 
         #print debugging values
-        print("loop: " ,stateManagerInstance.getLoopCount(), " distance: ", range1, " u input: ", u, " zvel: ", velz, " angx: ", x1, " angvelx: ", u1, " angy: ", y1, " angvely: ", u2, " angx: ", z1, " angvelx: ", u3) 
+        #print("loop: " ,stateManagerInstance.getLoopCount(), " distance: ", range1, " u input: ", u, " zvel: ", velz, " angx: ", x1, " angvelx: ", u1, " angy: ", y1, " angvely: ", u2, " angx: ", z1, " angvelx: ", u3) 
         if stateManagerInstance.getLoopCount() == 100:
-           time_init = float(rospy.Time.now().nsecs) * 0.00000001
+           time_init = float(rospy.get_time())# * 0.00000001
         if stateManagerInstance.getLoopCount() > 100:
            #hover pid
             if abs(1.5 - range1) < tol:
                controller.setVel([0.5,u1,u],[0,0,u3])
             else:
                controller.setVel([0,u1,u],[0,0,u3])
+	    print("Height (range1) is: ", range1)
+	    print("Altitude (integrated) is ", altitude)
+	    print("The time difference is ", dt)
 
-            
+	    rec_t.append(time-time_init)
+	    rec_range1.append(range1) 
+	    rec_u.append(u)        
+
             u, ui_prev = PID(range1, 1.5, lis1[0], lis1[1], lis1[2], ui_prev, dh, 0.5, dt)  
             #stable x pid
-            u1, ui_prev1 = PID(x1, 0, 1, 1, 1, ui_prev1, droll, 0.075, dt)
+            #u1, ui_prev1 = PID(x1, 0, 1, 1, 1, ui_prev1, droll, 0.075, dt)
             #stable z pid
-            u3, ui_prev3 = PID(z1, 0, 1, 1, 1, ui_prev3, dyaw, 0.1, dt)
+            #u3, ui_prev3 = PID(z1, 0, 1, 1, 1, ui_prev3, dyaw, 0.1, dt)
 
-            """#stable y pid
-            controller.setAngVel([0,u2,0])
-            u2, ui_prev2, e_prev2 = PID(y1, 0, 1, 1, 1, ui_prev2, e_prev2)"""
- 
-            print(float(rospy.Time.now().nsecs) * 0.00000001)
-            print "hellllo"
-            print(time_init)
-            neu_dict['time'].append(((float(rospy.Time.now().nsecs)) * 0.00000001) - (time_init * 0.00000001))
+            #print(float(rospy.get_time()) * 0.00000001)
+            #print "hellllo"
+            #print(time_init)
+	    
+
+	    
+            neu_dict['time'].append((float(rospy.get_time()) - time_init) )#* 0.00000001)
             neu_dict['error'].append(abs(1.5 - range1))
             
 
             stateManagerInstance.offboardRequest()  
-            stateManagerInstance.armRequest()  
+            stateManagerInstance.armRequest()
+	    offboard_status = True  
     if stateManagerInstance.getLoopCount() < 150:
        rospy.spin() 
    
+
+    plt.subplot(2,1,1)
+    #plt.ion()
+    plt.plot(rec_t,rec_range1)
+    plt.subplot(2,1,2)
+    plt.plot(rec_t,rec_u)
+    plt.show()
+
     with open("test1.csv", "wb") as f:
      writer = csv.writer(f)
      writer.writerow(neu_dict.keys())
