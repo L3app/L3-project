@@ -101,6 +101,10 @@ class stateManager:
         rospy.logwarn("ROS shutdown")
         return False
 
+def myhook():
+  print("KILL ME NOW!")
+
+
 
 def distanceCheck(msg):
     global range1
@@ -425,36 +429,39 @@ def main():
                     timer2 = timer1
 
                     # wait 2 seconds
-                # elif flightPhase == 6;
-                # print("Success!")
-                # controller.setVel([0, 0, 0], [0, 0, 0])
+            elif flightPhase == 6:
+                print("Success!")
+                controller.setVel([0, 0, 0], [0, 0, 0])
 
-                # if (timer1 - timer2) > 2:
-                # flightPhase = 7
-                # print("Moving to flight phase: ", flightPhase)
+                if (timer1 - timer2) > 2:
+                    flightPhase = 7
+                    print("Moving to flight phase: ", flightPhase)
 
-                # shut down unit
-                # elif flightPhase == 7:
-                # rospy.on_shutdown(h)
+            # shut down unit
+            elif flightPhase == 7:
+                break
+                
 
                 # Recording instantanteous error for optimizer summation
             time_err_dict['time'].append((float(rospy.get_time()) - time_init))
             time_err_dict['error'].append(abs(zHeight - range1))
 
-    # rospy.spin()
+        with open("test1.csv", "wb") as f:
+            writer = csv.writer(f)
+            writer.writerow(time_err_dict.keys())
+            writer.writerows(zip(*time_err_dict.values()))
+    rospy.on_shutdown(myhook)
 
-    # plt.subplot(2, 1, 1)
-    # plt.ion()
-    # plt.plot(rec_t, rec_range1)
-    # plt.subplot(2, 1, 2)
-    # plt.plot(rec_t, rec_u_z)
-    # plt.show()
+            # rospy.spin()
 
-    with open("test1.csv", "wb") as f:
-        writer = csv.writer(f)
-        writer.writerow(time_err_dict.keys())
-        writer.writerows(zip(*time_err_dict.values()))
+            # plt.subplot(2, 1, 1)
+            # plt.ion()
+            # plt.plot(rec_t, rec_range1)
+            # plt.subplot(2, 1, 2)
+            # plt.plot(rec_t, rec_u_z)
+            # plt.show()
 
 
 if __name__ == '__main__':
     main()
+
