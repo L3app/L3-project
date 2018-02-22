@@ -20,6 +20,7 @@ from mavros_msgs.srv import *
 
 warnings.filterwarnings("ignore", ".*GUI is implemented.*")
 
+
 class velControl:
     def __init__(self, attPub):
         self._attPub = attPub
@@ -318,14 +319,12 @@ def main():
         altitude_prev = altitude
         altitude = altitude_prev + u_z * dt
 
-
         controller.publishTargetPose(stateManagerInstance)
         stateManagerInstance.incrementLoop()
-        rate.sleep() # sleep at the set rate
+        rate.sleep()  # sleep at the set rate
 
         # rest on ground phase
         if flightPhase == 0:
-
             controller.setVel([0, 0, 0], [0, 0, 0])
 
         if stateManagerInstance.getLoopCount() == 100:
@@ -335,9 +334,9 @@ def main():
         if stateManagerInstance.getLoopCount() > 100:  # need to send some position data before we can switch to offboard mode otherwise offboard is rejected
 
             # Printing instance (loop) information
-            print("Coordinated (x,y,z): ",[xpos, ypos, range1])
+            print("Coordinated (x,y,z): ", [xpos, ypos, range1])
             print("Desired height is ", zHeight)
-            #print("The time difference is ", dt)
+            # print("The time difference is ", dt)
 
             # Recording to plot variables
             rec_t.append(time - time_init)
@@ -347,12 +346,12 @@ def main():
             # Moving to flight phase 1, take-off
             if flightPhase == 0:
                 flightPhase = 1
-                print("Moving to flight phase: ", flightPhase) 
+                print("Moving to flight phase: ", flightPhase)
 
                 stateManagerInstance.offboardRequest()  # request control from external computer
                 stateManagerInstance.armRequest()  # arming must take place after offboard is requested
                 zHeight = 1.5
-                #zHeight = zHeight + 0.02 # Birk: Why add 0.02, Alan?
+                # zHeight = zHeight + 0.02 # Birk: Why add 0.02, Alan?
 
             elif flightPhase == 1:
                 # Using PID to determine z-velocity, u_z
@@ -360,10 +359,7 @@ def main():
 
                 # Send velocities to controller
                 controller.setVel([xGain * (xDesiredDistance - xpos), yGain * (yDesiredDistance - ypos), u_z],
-                              [0, 0, 0])
-                # Recording instantanteous error for optimizer summation
-                time_err_dict['time'].append((float(rospy.get_time()) - time_init))
-                time_err_dict['error'].append(abs(zHeight - range1))
+                                  [0, 0, 0])
 
                 # change from phase 1 to 2 if at z=1.5m
                 if zHeight >= 1.5:  # stateManagerInstance.getLoopCount() > 100:   #need to send some position data before we can switch to offboard mode otherwise offboard is rejected
@@ -390,7 +386,8 @@ def main():
                 u_z, ui_z_prev = PID(range1, zHeight, lis1[0], lis1[1], lis1[2], ui_z_prev, dh, 0.5, dt)
 
                 # Calculating x-velocity
-                xcontrol = 0.5 - (0.2 / 0.1) * numpy.clip(abs(range1 - zHeight), 0, 0.1)  # this line is unstable when x0 > 0.4, at least on VM workstation (use player!)
+                xcontrol = 0.5 - (0.2 / 0.1) * numpy.clip(abs(range1 - zHeight), 0,
+                                                          0.1)  # this line is unstable when x0 > 0.4, at least on VM workstation (use player!)
 
                 # Send velocities to controller
                 controller.setVel([xcontrol, yGain * (yDesiredDistance - ypos), u_z], [0, 0, 0])
@@ -404,11 +401,13 @@ def main():
 
             # landing A phase
             elif flightPhase == 4:
-                zHeight = zHeight * 0.95 - 0.005 # Birk: Are these values from somewhere?
+                zHeight = zHeight * 0.95 - 0.005  # Birk: Are these values from somewhere?
 
                 # Send velocities to controller
                 # What is the idea behind the z-velocity here? Could we use u_z=PID here?
-                controller.setVel([xGain * (xDesiredDistance - xpos), yGain * (yDesiredDistance - ypos), 2 * (zHeight - range1)],[0, 0, 0])
+                controller.setVel(
+                    [xGain * (xDesiredDistance - xpos), yGain * (yDesiredDistance - ypos), 2 * (zHeight - range1)],
+                    [0, 0, 0])
 
                 # change from phase 4 to 5 when z = 0.2m
                 if zHeight <= 0.2:
@@ -418,39 +417,44 @@ def main():
             # landing B phase
             elif flightPhase == 5:
                 controller.setVel([0, 0, -0.2], [0, 0, 0])
-            	
-            	#stop velocity signal an change to phase 6
-            	if range1 <= 0.1:
-            		flightPhase = 6
-            		print("Moving to flight phase: ", flightPhase)
-            		timer2 = timer1	
-    		
-            # wait 2 seconds
-			#elif flightPhase == 6;
-				#print("Success!")
-        		#controller.setVel([0, 0, 0], [0, 0, 0])
 
-        		#if (timer1 - timer2) > 2:
-        			#flightPhase = 7
-        			#print("Moving to flight phase: ", flightPhase)
-        	
-        	# shut down unit
-        	#elif flightPhase == 7:
-        		#rospy.on_shutdown(h)
+                # stop velocity signal an change to phase 6
+                if range1 <= 0.1:
+                    flightPhase = 6
+                    print("Moving to flight phase: ", flightPhase)
+                    timer2 = timer1
 
-    #rospy.spin()
+                    # wait 2 seconds
+                # elif flightPhase == 6;
+                # print("Success!")
+                # controller.setVel([0, 0, 0], [0, 0, 0])
 
-    #plt.subplot(2, 1, 1)
-    #plt.ion()
-    #plt.plot(rec_t, rec_range1)
-    #plt.subplot(2, 1, 2)
-    #plt.plot(rec_t, rec_u_z)
-    #plt.show()
+                # if (timer1 - timer2) > 2:
+                # flightPhase = 7
+                # print("Moving to flight phase: ", flightPhase)
+
+                # shut down unit
+                # elif flightPhase == 7:
+                # rospy.on_shutdown(h)
+
+                # Recording instantanteous error for optimizer summation
+            time_err_dict['time'].append((float(rospy.get_time()) - time_init))
+            time_err_dict['error'].append(abs(zHeight - range1))
+
+    # rospy.spin()
+
+    # plt.subplot(2, 1, 1)
+    # plt.ion()
+    # plt.plot(rec_t, rec_range1)
+    # plt.subplot(2, 1, 2)
+    # plt.plot(rec_t, rec_u_z)
+    # plt.show()
 
     with open("test1.csv", "wb") as f:
         writer = csv.writer(f)
         writer.writerow(time_err_dict.keys())
         writer.writerows(zip(*time_err_dict.values()))
+
 
 if __name__ == '__main__':
     main()
