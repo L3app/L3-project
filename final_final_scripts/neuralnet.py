@@ -208,7 +208,7 @@ with tf.Session() as sess:
         batch_y = np.array([lis3,
                             lis4])
         batch_y = np.transpose(batch_y)
-        if step == 0:
+        if step == 1:
             print('batch x: ', batch_x)
             print('batch y: ', batch_y)
 
