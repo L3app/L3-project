@@ -41,7 +41,7 @@ n_hidden_1 = 400
 n_hidden_2 = 300
 
 # create actor network architecture==============================================================================================
-w1 = tf.Variable(tf.random_normal([4, n_hidden_1]))
+w1 = tf.Variable(tf.random_normal([5, n_hidden_1]))
 w2 = tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2]))
 w3 = tf.Variable(tf.random_normal([n_hidden_2, 2]))
 b1 = tf.Variable(tf.random_normal([n_hidden_1]))
@@ -50,7 +50,7 @@ b3 = tf.Variable(tf.random_normal([2]))
 #=============================================================================================================================
 
 #create critic network architecture================================================================================================
-w1c =  tf.Variable(tf.random_normal([4, n_hidden_1]))
+w1c =  tf.Variable(tf.random_normal([5, n_hidden_1]))
 w2c = tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2]))
 w2a = tf.Variable(tf.random_normal([2, n_hidden_2]))
 w3c =  tf.Variable(tf.random_normal([n_hidden_2, 1]))
@@ -161,9 +161,9 @@ class ActorNetwork(object):
     def create_actor_network(self):
         inputs = tf.placeholder(tf.float32, [None, self.s_dim])
 
-        layer_1 = tf.sigmoid(tf.add(tf.matmul(inputs, w1), b1))
+        layer_1 = tf.nn.relu(tf.add(tf.matmul(inputs, w1), b1))
     # Hidden fully connected layer with 256 neurons
-        layer_2 = tf.sigmoid(tf.add(tf.matmul(layer_1, w2), b2))
+        layer_2 = tf.nn.relu(tf.add(tf.matmul(layer_1, w2), b2))
     # Output fully connected layer with a neuron for each class
         out_layer = tf.nn.tanh(tf.add(tf.matmul(layer_2, w3), b3))
 
@@ -522,7 +522,7 @@ def main():
 #initialize training parameters=======================================================================================================        
         np.random.seed(int(1234))
         tf.set_random_seed(int(1234))
-        state_dim = 4
+        state_dim = 5
         action_dim = 2
         action_bound = 0.5
 #======================================================================================================================================
