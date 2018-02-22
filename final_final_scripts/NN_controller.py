@@ -26,7 +26,7 @@ filename = input('which knowledge file: ')
 
 #neural network parameters for restoration================================================
 batch_no = 1
-num_input = 4
+num_input = 5
 num_output = 2
 n_hidden_1 = 400 
 n_hidden_2 = 300 
@@ -37,17 +37,17 @@ Y = tf.placeholder("float", [batch_no, num_output])
 #neural network architecture==============================================================
 n_hidden_1 = 400
 n_hidden_2 = 300
-w1 = tf.Variable(tf.random_normal([4, n_hidden_1]))
+w1 = tf.Variable(tf.random_normal([num_input, n_hidden_1]))
 w2 = tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2]))
-w3 = tf.Variable(tf.random_normal([n_hidden_2, 2]))
+w3 = tf.Variable(tf.random_normal([n_hidden_2, num_output]))
 b1 = tf.Variable(tf.random_normal([n_hidden_1]))
 b2 = tf.Variable(tf.random_normal([n_hidden_2]))
-b3 = tf.Variable(tf.random_normal([2]))
+b3 = tf.Variable(tf.random_normal([num_output]))
 
 def neural_net(x):
-    layer_1 = tf.sigmoid(tf.add(tf.matmul(x, w1), b1))
+    layer_1 = tf.nn.relu(tf.add(tf.matmul(x, w1), b1))
     # Hidden fully connected layer with 256 neurons
-    layer_2 = tf.sigmoid(tf.add(tf.matmul(layer_1, w2), b2))
+    layer_2 = tf.nn.relu(tf.add(tf.matmul(layer_1, w2), b2))
     # Output fully connected layer with a neuron for each class
     out_layer = tf.nn.tanh(tf.add(tf.matmul(layer_2, w3), b3))
     out_layer = tf.multiply(out_layer, 0.5)
@@ -238,6 +238,7 @@ def main():
     timer1 = 0
     global velx, vely, velz
     velx, vely, velz = 0, 0, 0
+    theta = 0
 #=========================================================================================  
 
 #utility==================================================================================
@@ -275,24 +276,24 @@ def main():
    
 #start tensorflow session=================================================================
     with tf.Session() as sess:
-       saver.restore(sess, filename)
-       batch_1 = np.empty([1, 4])
-       batch_1 = [0.2, 0.3, 0.2, 0]
-       batch_1 = np.reshape(batch_1,(1,4))
+       """saver.restore(sess, filename)
+       batch_1 = np.empty([1, num_input])
+       batch_1 = [0.2, 0.3, 0.2, 0, 0]
+       batch_1 = np.reshape(batch_1,(1,num_input))
        prediction = sess.run(logits, feed_dict={X: batch_1})
        print(batch_1)
        print(prediction)
-       batch_1 = [1.8, 0.4, 0.2, 0]
-       batch_1 = np.reshape(batch_1,(1,4))
+       batch_1 = [1.8, 0.4, 0.2, 0,0]
+       batch_1 = np.reshape(batch_1,(1,num_input))
        prediction = sess.run(logits, feed_dict={X: batch_1})
        print(batch_1)
        print(prediction)
-       batch_1 = [1.3, 0.2, 0.4, 0]
-       batch_1 = np.reshape(batch_1,(1,4))
+       batch_1 = [1.3, 0.2, 0.4, 0,0]
+       batch_1 = np.reshape(batch_1,(1,num_input))
        prediction = sess.run(logits, feed_dict={X: batch_1})
        print(batch_1)
        print(prediction)
-       rospy.sleep(10)
+       rospy.sleep(10)"""
 #=========================================================================================
 #=========================================================================================
 
@@ -306,9 +307,9 @@ def main():
 #start publishing velocities after 100 iterations to account for offboard control=========
            if stateManagerInstance.getLoopCount() > 100:
                
-               batch_1 = np.empty([1, 4])
-               batch_1 = [range1, velz, velx, y1]
-               batch_1 = np.reshape(batch_1,(1,4))
+               batch_1 = np.empty([1, num_input])
+               batch_1 = [range1, velz, velx, y1, theta]
+               batch_1 = np.reshape(batch_1,(1,num_input))
                prediction = sess.run(logits, feed_dict={X: batch_1})
 
                if abs(range1) > 1.45 and term == 0:
