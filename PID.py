@@ -313,7 +313,7 @@ def main():
             elif switch == 1:
                 controller.setVel([xcontrol,yGain * (yDesiredDistance - ypos),u],[0,0,0])
                 u, ui_prev = PID(range1, 1.5, 0.5, 0.01, 1.1, ui_prev, dh, 0.5, dt)
-                xcontrol = 0.5 - (0.3/90)*math.degrees(numpy.arctan(abs(deltaz/deltax)))
+                xcontrol = 0.5 - abs(range1 - 1.5)
 
             """#stable y pid
             controller.setAngVel([0,u2,0])
