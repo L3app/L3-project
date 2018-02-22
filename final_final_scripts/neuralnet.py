@@ -18,13 +18,14 @@ with open(filename) as f:
     lis4 = [float(x[3].rstrip()) for x in lis[1:len(lis) - 1]]
     lis5 = [float(x[4].rstrip()) for x in lis[1:len(lis) - 1]]
     lis6 = [float(x[5].rstrip()) for x in lis[1:len(lis) - 1]]
+    lis7 = [float(x[6].rstrip()) for x in lis[1:len(lis) - 1]]
 
 # Parameters
 learning_rate = 0.001
-num_steps = len(lis1)
+num_steps = 10000
 batch_no = len(lis1)
 display_step = 10
-num_input = 4
+num_input = 5
 num_output = 2
 
 # Network Parameters
@@ -87,9 +88,9 @@ b2 = tf.Variable(tf.random_normal([n_hidden_2]))
 b3 = tf.Variable(tf.random_normal([num_output]))
 
 def neural_net(x):
-    layer_1 = tf.sigmoid(tf.add(tf.matmul(x, w1), b1))
+    layer_1 = tf.nn.relu(tf.add(tf.matmul(x, w1), b1))
     # Hidden fully connected layer with 256 neurons
-    layer_2 = tf.sigmoid(tf.add(tf.matmul(layer_1, w2), b2))
+    layer_2 = tf.nn.relu(tf.add(tf.matmul(layer_1, w2), b2))
     # Output fully connected layer with a neuron for each class
     out_layer = tf.nn.tanh(tf.add(tf.matmul(layer_2, w3), b3))
     out_layer = tf.multiply(out_layer, 0.5)
@@ -174,7 +175,7 @@ with tf.Session() as sess:
     sess.run(init)
     counter = 0
     x = 0
-    for step in range(1, 10001):
+    for step in range(1, numsteps):
     #for step in range(1, 10):
         batch_x = np.empty([batch_no, num_input])
         batch_y = np.empty([batch_no, num_input])
@@ -201,11 +202,15 @@ with tf.Session() as sess:
         batch_x = np.array([lis1,
                             lis2,
                             lis5,
-                            lis6])
+                            lis6,
+                            lis7])
         batch_x = np.transpose(batch_x)
         batch_y = np.array([lis3,
                             lis4])
         batch_y = np.transpose(batch_y)
+        if step == 0:
+            print('batch x: ', batch_x)
+            print('batch y: ', batch_y)
 
         sess.run(train_op, feed_dict={X: batch_x, Y:batch_y})
         if step % display_step == 0 or step == 1:
