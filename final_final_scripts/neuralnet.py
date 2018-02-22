@@ -175,7 +175,7 @@ with tf.Session() as sess:
     sess.run(init)
     counter = 0
     x = 0
-    for step in range(1, numsteps):
+    for step in range(1, numsteps + 1):
     #for step in range(1, 10):
         batch_x = np.empty([batch_no, num_input])
         batch_y = np.empty([batch_no, num_input])
